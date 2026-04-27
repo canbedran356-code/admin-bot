@@ -7,19 +7,33 @@ const userSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
-  username: String,
-  firstName: String,
+
+  username: {
+    type: String,
+    lowercase: true,
+    trim: true,
+    sparse: true,           // username olmayabilir
+    index: true
+  },
+
+  firstName: {
+    type: String,
+    required: true
+  },
+
   lastName: String,
 
   warnings: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
 
   isBanned: {
     type: Boolean,
     default: false
   },
+
   banReason: String,
   banDate: Date,
 
@@ -27,6 +41,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+
   muteUntil: Date,
   muteReason: String,
 
@@ -35,11 +50,15 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
 
-  lastActivity: Date,
+  lastActivity: {
+    type: Date,
+    default: Date.now
+  },
 
   messageCount: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
 
   warningHistory: [
@@ -58,6 +77,22 @@ const userSchema = new mongoose.Schema({
       }
     }
   ]
+}, {
+  timestamps: true   // createdAt ve updatedAt otomatik ekler
+});
+
+// Index'ler
+userSchema.index({ username: 1 }, { sparse: true });
+userSchema.index({ isBanned: 1 });
+userSchema.index({ isMuted: 1 });
+
+// Pre-save middleware (opsiyonel iyileştirmeler)
+userSchema.pre('save', function(next) {
+  if (this.username) {
+    this.username = this.username.toLowerCase().trim();
+  }
+  this.lastActivity = new Date();
+  next();
 });
 
 module.exports = mongoose.model('User', userSchema);
