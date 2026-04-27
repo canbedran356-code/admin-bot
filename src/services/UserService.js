@@ -2,18 +2,32 @@ const User = require('../models/User');
 const ActionLog = require('../models/ActionLog');
 
 class UserService {
+  
   async getOrCreateUser(telegramId, userData) {
     let user = await User.findOne({ telegramId });
+
     if (!user) {
       user = new User({
         telegramId,
-        username: userData.username || 'anonymous',
+        username: (userData.username || '').toLowerCase(),
         firstName: userData.first_name,
-        lastName: userData.last_name
+        lastName: userData.last_name || null
       });
+      await user.save();
+    } else if (userData.username && user.username !== userData.username.toLowerCase()) {
+      // Username değişmişse güncelle
+      user.username = userData.username.toLowerCase();
       await user.save();
     }
     return user;
+  }
+
+  // Yeni eklenen fonksiyon (@username ile işlem için)
+  async getUserByUsername(username) {
+    if (!username) return null;
+    return await User.findOne({ 
+      username: username.toLowerCase() 
+    });
   }
 
   async banUser(userId, reason, admin) {
@@ -24,9 +38,11 @@ class UserService {
         banReason: reason,
         banDate: new Date()
       },
-      { new: true }
+      { new: true, upsert: false }
     );
-    await this.logAction(userId, 'ban', reason, admin);
+    if (user) {
+      await this.logAction(userId, 'ban', reason, admin);
+    }
     return user;
   }
 
@@ -40,12 +56,20 @@ class UserService {
       },
       { new: true }
     );
-    await this.logAction(userId, 'unban', 'Ban kaldırıldı', admin);
+    if (user) {
+      await this.logAction(userId, 'unban', 'Ban kaldırıldı', admin);
+    }
     return user;
   }
 
   async warnUser(userId, reason, admin) {
-    const user = await User.findOneAndUpdate(
+    // Kullanıcı yoksa oluştur
+    let user = await User.findOne({ telegramId: userId });
+    if (!user) {
+      user = await this.getOrCreateUser(userId, { username: null, first_name: 'Unknown' });
+    }
+
+    user = await User.findOneAndUpdate(
       { telegramId: userId },
       {
         $inc: { warnings: 1 },
@@ -53,12 +77,14 @@ class UserService {
           warningHistory: {
             date: new Date(),
             reason,
-            admin
+            adminId: admin.id,
+            adminUsername: admin.username
           }
         }
       },
       { new: true }
     );
+
     await this.logAction(userId, 'warn', reason, admin);
     return user;
   }
@@ -67,17 +93,20 @@ class UserService {
     const user = await User.findOneAndUpdate(
       { telegramId: userId },
       {
-        $set: { warnings: 0 },
-        $set: { warningHistory: [] }
+        warnings: 0,
+        warningHistory: []
       },
       { new: true }
     );
-    await this.logAction(userId, 'unwarn', 'Uyarılar temizlendi', admin);
+    if (user) {
+      await this.logAction(userId, 'unwarn', 'Uyarılar temizlendi', admin);
+    }
     return user;
   }
 
   async muteUser(userId, minutes, reason, admin) {
     const muteUntil = new Date(Date.now() + minutes * 60 * 1000);
+
     const user = await User.findOneAndUpdate(
       { telegramId: userId },
       {
@@ -87,7 +116,10 @@ class UserService {
       },
       { new: true }
     );
-    await this.logAction(userId, 'mute', `${minutes} dakika - ${reason}`, admin);
+
+    if (user) {
+      await this.logAction(userId, 'mute', `${minutes} dakika - ${reason}`, admin);
+    }
     return user;
   }
 
@@ -101,20 +133,26 @@ class UserService {
       },
       { new: true }
     );
-    await this.logAction(userId, 'unmute', 'Susturma kaldırıldı', admin);
+    if (user) {
+      await this.logAction(userId, 'unmute', 'Susturma kaldırıldı', admin);
+    }
     return user;
   }
 
   async logAction(userId, action, reason, admin) {
-    const log = new ActionLog({
-      userId,
-      action,
-      reason,
-      adminId: admin.id,
-      adminUsername: admin.username,
-      timestamp: new Date()
-    });
-    await log.save();
+    try {
+      const log = new ActionLog({
+        userId,
+        action,
+        reason,
+        adminId: admin?.id || null,
+        adminUsername: admin?.username || 'System',
+        timestamp: new Date()
+      });
+      await log.save();
+    } catch (err) {
+      console.error('Log kaydedilemedi:', err);
+    }
   }
 
   async getRecentLogs(limit = 10) {
