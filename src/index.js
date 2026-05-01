@@ -352,6 +352,29 @@ bot.command('logs', async ctx => {
   }
 });
 
+// ==================== DEEPSEEK AI KOMUTLARI ====================
+
+// /ai veya /deepseek komutu
+bot.command(['ai', 'deepseek'], async (ctx) => {
+  const text = ctx.message.text.split(' ').slice(1).join(' ').trim();
+  
+  if (!text) {
+    return ctx.reply('🤖 DeepSeek ile sohbet etmek için:\n`/ai merhaba nasılsın?` şeklinde yazabilirsin.', { parse_mode: 'Markdown' });
+  }
+
+  const userId = ctx.from.id;
+  ctx.reply('🤖 DeepSeek düşünüyor...');
+
+  const cevap = await askDeepSeek(userId, text);
+  ctx.reply(cevap);
+});
+
+// /ai clear → sohbet geçmişini temizle
+bot.command(['aiclear', 'ai clear', 'deepseek clear'], (ctx) => {
+  const userId = ctx.from.id;
+  clearConversation(userId);
+  ctx.reply('✅ DeepSeek sohbet geçmişi temizlendi.');
+});
 // Info Command
 bot.command('info', ctx => {
   const info = `
