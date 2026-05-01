@@ -363,13 +363,17 @@ bot.command(['ai', 'deepseek'], async (ctx) => {
   }
 
   const userId = ctx.from.id;
-  ctx.reply('🤖 DeepSeek düşünüyor...');
+  
+  // Düşünüyor mesajı
+  await ctx.reply('🤖 DeepSeek düşünüyor...');
 
   const cevap = await askDeepSeek(userId, text);
-  ctx.reply(cevap);
+  
+  // Cevabı gönder
+  await ctx.reply(cevap);
 });
 
-// /ai clear → sohbet geçmişini temizle
+// /aiclear → sohbet geçmişini temizle
 bot.command(['aiclear', 'ai clear', 'deepseek clear'], (ctx) => {
   const userId = ctx.from.id;
   clearConversation(userId);
