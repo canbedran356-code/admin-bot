@@ -1,11 +1,11 @@
 const { OpenAI } = require('openai');
 
 const client = new OpenAI({
-  api_key: process.env.DEEPSEEK_API_KEY,
+  apiKey: process.env.DEEPSEEK_API_KEY,        // ← burası düzeltildi (camelCase)
   baseURL: "https://api.deepseek.com"
 });
 
-const conversations = new Map(); // kullanıcı başına sohbet geçmişi
+const conversations = new Map();
 
 const getConversation = (userId) => {
   if (!conversations.has(userId)) {
@@ -22,12 +22,11 @@ const askDeepSeek = async (userId, message) => {
   const history = getConversation(userId);
   history.push({ role: "user", content: message });
 
-  // Son 15 mesajı tut (çok uzamasın)
   if (history.length > 15) history.splice(0, history.length - 15);
 
   try {
     const response = await client.chat.completions.create({
-      model: "deepseek-v4-flash",     // istersen deepseek-v4-pro da yazabilirsin
+      model: "deepseek-v4-flash",
       messages: history,
       temperature: 0.8,
       max_tokens: 2048,
