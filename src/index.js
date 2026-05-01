@@ -1,3 +1,4 @@
+const { askDeepSeek, clearConversation } = require('./services/DeepSeekService');
 const { Telegraf } = require('telegraf');
 const mongoose = require('mongoose');
 require('dotenv').config();
