@@ -1,4 +1,178 @@
-const { askDeepSeek, clearConversation } = require('./services/DeepSeekService');
+// ====================== BAN COMMAND ======================
+bot.command('ban', async ctx => {
+  if (!ctx.state.isAdmin) return ctx.reply('  Bu komutu kullanma izniniz yok!');
+
+  const userId = await getTargetUserId(ctx);
+  if (!userId) return ctx.reply('  Lütfen bir mesaja reply edin veya @kullanıcıadı / ID belirtin!');
+
+  const reason = extractReason(ctx.message.text, '/ban');
+  const targetInfo = await getTargetInfo(ctx, userId);
+
+  try {
+    // 🔥 EKLENDİ
+    await ctx.banChatMember(ctx.chat.id, userId);
+
+    await UserService.banUser(userId, reason, {
+      id: ctx.from.id,
+      username: ctx.from.username || 'Admin'
+    });
+    await ctx.reply(
+      `  *Yasak uygulandı*\n  Kullanıcı: ${targetInfo.first_name}\n  Nedeni: ${reason}`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch (error) {
+    console.error(error);
+    ctx.reply('  Hata oluştu!');
+  }
+});
+
+
+// ====================== UNBAN COMMAND ======================
+bot.command('unban', async ctx => {
+  if (!ctx.state.isAdmin) return ctx.reply('  Bu komutu kullanma izniniz yok!');
+
+  const userId = await getTargetUserId(ctx);
+  if (!userId) return ctx.reply('  Lütfen bir mesaja reply edin veya @kullanıcıadı / ID belirtin!');
+
+  const targetInfo = await getTargetInfo(ctx, userId);
+
+  try {
+    // 🔥 EKLENDİ
+    await ctx.unbanChatMember(ctx.chat.id, userId);
+
+    await UserService.unbanUser(userId, {
+      id: ctx.from.id,
+      username: ctx.from.username || 'Admin'
+    });
+    await ctx.reply(
+      `  *Yasak kaldırıldı*\n  Kullanıcı: ${targetInfo.first_name}`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch (error) {
+    console.error(error);
+    ctx.reply('  Hata oluştu!');
+  }
+});
+
+
+// ====================== MUTE COMMAND ======================
+bot.command('mute', async ctx => {
+  if (!ctx.state.isAdmin) return ctx.reply('  Bu komutu kullanma izniniz yok!');
+
+  const userId = await getTargetUserId(ctx);
+  if (!userId) return ctx.reply('  Lütfen bir mesaja reply edin veya @kullanıcıadı / ID belirtin!');
+
+  const parts = ctx.message.text.split(/\s+/);
+  let minuteIndex = 1;
+  if (parts[1] && (parts[1].startsWith('@') || /^\d{5,}$/.test(parts[1]))) {
+    minuteIndex = 2;
+  }
+
+  const minutes = parseInt(parts[minuteIndex]) || 30;
+  const reason = parts.slice(minuteIndex + 1).join(' ') || 'Belirtilmemiş';
+  const targetInfo = await getTargetInfo(ctx, userId);
+
+  try {
+    // 🔥 EKLENDİ
+    await ctx.restrictChatMember(ctx.chat.id, userId, {
+      permissions: { can_send_messages: false },
+      until_date: Math.floor(Date.now() / 1000) + (minutes * 60)
+    });
+
+    await UserService.muteUser(userId, minutes, reason, {
+      id: ctx.from.id,
+      username: ctx.from.username || 'Admin'
+    });
+    await ctx.reply(
+      `  *Susturma uygulandı*\n  Kullanıcı: ${targetInfo.first_name}\n  Süre: ${minutes} dakika\n  Nedeni: ${reason}`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch (error) {
+    console.error(error);
+    ctx.reply('  Hata oluştu!');
+  }
+});
+
+
+// ====================== UNMUTE COMMAND ======================
+bot.command('unmute', async ctx => {
+  if (!ctx.state.isAdmin) return ctx.reply('  Bu komutu kullanma izniniz yok!');
+
+  const userId = await getTargetUserId(ctx);
+  if (!userId) return ctx.reply('  Lütfen bir mesaja reply edin veya @kullanıcıadı / ID belirtin!');
+
+  const targetInfo = await getTargetInfo(ctx, userId);
+
+  try {
+    // 🔥 EKLENDİ
+    await ctx.restrictChatMember(ctx.chat.id, userId, {
+      permissions: { can_send_messages: true }
+    });
+
+    await UserService.unmuteUser(userId, {
+      id: ctx.from.id,
+      username: ctx.from.username || 'Admin'
+    });
+    await ctx.reply(
+      `  *Susturma kaldırıldı*\n  Kullanıcı: ${targetInfo.first_name}`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch (error) {
+    console.error(error);
+    ctx.reply('  Hata oluştu!');
+  }
+});
+
+
+// ====================== SESSION ACTION FIX ======================
+bot.on('text', async ctx => {
+  const action = ctx.session?.action;
+  const targetId = ctx.session?.targetUserId;
+
+  if (!action || !targetId || !ctx.state.isAdmin) return;
+
+  const reason = ctx.message.text.trim();
+  const admin = { id: ctx.from.id, username: ctx.from.username || 'Admin' };
+
+  delete ctx.session.action;
+  delete ctx.session.muteMinutes;
+
+  try {
+    if (action === 'ban') {
+      // 🔥 EKLENDİ
+      await ctx.banChatMember(ctx.chat.id, targetId);
+
+      await UserService.banUser(targetId, reason, admin);
+      await ctx.reply(`  Yasak uygulandı. Sebep: ${reason}`);
+
+    } else if (action === 'warn') {
+      const user = await UserService.warnUser(targetId, reason, admin);
+      await ctx.reply(`  Uyarı verildi (${user?.warnings || '?'}/3). Sebep: ${reason}`);
+
+    } else if (action === 'mute') {
+      const mins = ctx.session?.muteMinutes || 30;
+
+      // 🔥 EKLENDİ
+      await ctx.restrictChatMember(ctx.chat.id, targetId, {
+        permissions: { can_send_messages: false },
+        until_date: Math.floor(Date.now() / 1000) + (mins * 60)
+      });
+
+      await UserService.muteUser(targetId, mins, reason, admin);
+      await ctx.reply(`  ${mins} dakika susturuldu. Sebep: ${reason}`);
+
+    } else if (action === 'kick') {
+      await ctx.banChatMember(ctx.chat.id, targetId);
+      await ctx.unbanChatMember(ctx.chat.id, targetId);
+      await UserService.logAction(targetId, 'kick', reason, admin);
+      await ctx.reply(`  Kullanıcı atıldı. Sebep: ${reason}`);
+    }
+
+  } catch (err) {
+    console.error('Session action hatası:', err);
+    ctx.reply('  İşlem sırasında hata oluştu!');
+  }
+});const { askDeepSeek, clearConversation } = require('./services/DeepSeekService');
 const { Telegraf } = require('telegraf');
 const mongoose = require('mongoose');
 require('dotenv').config();
