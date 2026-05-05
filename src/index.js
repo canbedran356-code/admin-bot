@@ -33,6 +33,12 @@ bot.use(async (ctx, next) => {
 
   await next();
 });
+bot.on('message', async (ctx, next) => {
+  if (ctx.from) {
+    await UserService.getOrCreateUser(ctx.from.id, ctx.from);
+  }
+  return next();
+});
 
 // ====================== YARDIMCI FONKSİYONLAR ======================
 
